@@ -1,5 +1,6 @@
 const fs = require('fs')
 const path = require('path')
+const { execFileSync } = require('child_process')
 const logger = require('./lib/util/logger')('app/routes')
 
 const routes = []
@@ -93,6 +94,7 @@ use(async (req, res, next) => {
 
       let imgPath = decodeURIComponent(decodeURIComponent(req.asPath.replace(reg, '')))
       imgPath = imgPath.replace(/\\ /g, ' ')
+      const imageRef = imgPath
       if (imgPath[0] !== '/' && imgPath[0] !== '\\') {
         imgPath = path.join(fileDir, imgPath)
       } else if (!fs.existsSync(imgPath)) {
@@ -104,6 +106,18 @@ use(async (req, res, next) => {
             imgPath = tmpImgPath
             break
           }
+        }
+      }
+      if (!fs.existsSync(imgPath)) {
+        const cwd = await plugin.nvim.call('getcwd')
+        const pattern = '(^|/)' + imageRef.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$'
+        try {
+          imgPath = execFileSync('fd', [
+            '--type', 'f', '--absolute-path', '--full-path', '--case-sensitive',
+            '--max-results', '1', '--print0', '--', pattern, cwd
+          ], { encoding: 'utf8' }).split('\0')[0] || imgPath
+        } catch (error) {
+          logger.error('image search failed: ', error.message)
         }
       }
       logger.info('imgPath', imgPath);
